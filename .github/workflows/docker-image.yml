@@ -21,6 +21,6 @@ jobs:
     - name: Check the running docker instance
       run: docker ps -a
     - name: Start docker container
-      run: docker run -d -p 80:80 ngnix-image:latest --name just-created-image
+      run: docker run -d -p 80:80 ngnix-image:latest
     - name: Check the running docker instance
       run: docker ps -a
