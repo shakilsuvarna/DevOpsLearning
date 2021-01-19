@@ -28,3 +28,8 @@ jobs:
     # Runs a single command using the runners shell
     - name: Send greeting
       run: echo "Hello ${{ github.event.inputs.name }}"
+
+    - name: passing environment varibale inside files
+      run : ehco "Thank you for visiting! Regards ${{ MYNAME }}
+      env:
+        MYNAME : John
