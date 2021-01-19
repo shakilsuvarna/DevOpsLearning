@@ -29,7 +29,7 @@ jobs:
     - name: Send greeting
       run: echo "Hello ${{ github.event.inputs.name }}"
 
-    - name: passing environment varibale inside files
+    - name: Passing environment variable inside github actions.
       run : echo "Thank you for visiting! Regards $MYNAME"
       env:
         MYNAME : John
