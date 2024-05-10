@@ -1,0 +1,125 @@
+# action.yml
+name: REMOTE WORKFLOW CALLER ACTION
+description: "Trigger remote workflow from the workflow"
+
+on:
+  workflow_dispatch:
+    inputs:
+      REPO_NAME:
+        description: 'REPO NAME'
+        default: 'siqa-testing-repo'
+        required: true
+        type: string
+      WORKFLOW_NAME:
+        description: 'WORKFLOW NAME'
+        default: 'callworkflow.yaml'
+        required: true
+        type: string
+      OWNER:
+        description: 'OWNER NAME'
+        default: 'C2E'
+        required: true
+        type: string
+      BRANCH:
+        description: 'BRANCH'
+        default: 'main'
+        required: true
+        type: string
+      GITHUB_PAT_TOKEN:
+        description: 'GIT PAT TOKEN'
+        default: 'changeit'
+        required: true
+        type: string
+      INPUTS:
+        description: 'INPUTS'
+        default: 'changeit'
+        required: true
+        type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Add report link as annotation
+      env:
+        REPO_NAME: ${{ inputs.REPO_NAME }}
+        WORKFLOW_ID: ${{ inputs.WORKFLOW_NAME }}
+        OWNER: ${{ inputs.OWNER }}
+        BRANCH: ${{ inputs.BRANCH }}
+        GITHUB_PAT_TOKEN: ${{ inputs.GITHUB_PAT_TOKEN }}
+        INPUTS: ${{ inputs.INPUTS }}
+
+      uses: actions/github-script@v5      
+      with:
+        github-token: ${{ env.GITHUB_PAT_TOKEN }}
+        script: |
+          const owner='${{env.OWNER}}'
+          const repo='${{env.REPO_NAME}}'
+          const workflow_id='${{env.WORKFLOW_ID}}'
+          const EVENT_ID = `${process.env.GITHUB_RUN_ID}`;
+          console.log(EVENT_ID);
+          const EVENT_NUMBER = process.env.GITHUB_RUN_ID;
+          const jsonDataString = `${{env.INPUTS}}`;
+          const response = await github.rest.actions.createWorkflowDispatch({
+                owner: '${{env.OWNER}}',
+                repo: '${{env.REPO_NAME}}',
+                workflow_id: '${{env.WORKFLOW_ID}}',
+                ref: '${{env.BRANCH}}',
+                inputs: JSON.parse(jsonDataString)
+          });
+
+
+          function sleep(milliseconds) {  
+              return new Promise(resolve => setTimeout(resolve, milliseconds));  
+          }
+
+          // Added sleep for 10s to wait for workflow to get trigger
+          await sleep(10000)
+
+          const response2 = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id,
+          });
+
+          //DEBUG STATEMENT
+          console.log(response2.data.workflow_runs[0])
+
+          // Loop through the array and check for the target value
+          let run_id
+          let workflow_run_name
+          let run_url
+          for (let i = 0; i < response2.data.workflow_runs.length; i++) {
+              console.log(response2.data.workflow_runs[i].name)
+              workflow_run_name = response2.data.workflow_runs[i].name;
+              run_id = response2.data.workflow_runs[i].id;
+              run_url = response2.data.workflow_runs[i].html_url;
+              if (workflow_run_name.includes(EVENT_ID)) {
+                  console.log('RUN NAME : '+EVENT_ID);
+                  console.log('RUN ID : '+run_id);
+                  console.log(`RUN HTML URL : `+run_url);
+                  const conclusion=await waitForWorkflowToComplete(owner,repo,run_id)
+                  if(conclusion==='failure' || conclusion==='cancelled'){
+                      throw "this job has failed or cancelled"
+                      }
+                   console.log('run is success')
+                  break;
+              }
+          }
+
+          async function waitForWorkflowToComplete(owner,repo,run_id) {
+              let finalStatus="in_progress"  
+              let conclusion="failure"
+              while(finalStatus === 'in_progress' || finalStatus === 'queued'){
+                const response3 = await github.rest.actions.getWorkflowRun({
+                  owner,
+                  repo,
+                  run_id
+                });
+                finalStatus= response3.data.status;
+                conclusion=response3.data.conclusion;
+                console.log('The workflow status is ',finalStatus, conclusion);
+                await sleep(10000);
+              } ;
+
+              return conclusion
+          }
