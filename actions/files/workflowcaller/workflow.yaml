@@ -1,0 +1,47 @@
+name: Trigger remote action
+
+on:
+ workflow_dispatch:
+    inputs:
+      REPO_NAME:
+        description: 'REPO NAME'
+        default: 'siqa-testing-repo'
+        required: true
+        type: string
+      WORKFLOW_NAME:
+        description: 'WORKFLOW NAME'
+        default: 'callworkflow.yaml'
+        required: true
+        type: string
+      OWNER:
+        description: 'OWNER NAME'
+        default: 'C2E'
+        required: true
+        type: string
+      BRANCH:
+        description: 'BRANCH'
+        default: 'main'
+        required: true
+        type: string
+                
+
+#GITHUB_TOKEN permissions (required)
+permissions: 
+  contents: read
+  
+jobs:
+  call-remote-workflow:
+    runs-on: self-hosted
+    name: checkouts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Trigger remote github workflow
+        uses: AIM/remote-workflow-call-action@main
+        with:
+          REPO_NAME: ${{ inputs.REPO_NAME }}
+          WORKFLOW_NAME: ${{ inputs.WORKFLOW_NAME }}
+          OWNER: ${{ inputs.OWNER }}
+          BRANCH: ${{ inputs.BRANCH }}
+          GITHUB_PAT_TOKEN: ${{ secrets.GITHUB_PAT_TOKEN }}
