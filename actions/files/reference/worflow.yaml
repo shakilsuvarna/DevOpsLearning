@@ -1,0 +1,68 @@
+name: Tests github action
+
+on:
+  workflow_dispatch:
+    inputs:
+      isimage:
+        description: 'server docker image'
+        default: 'docker/image:1.0.0'
+        required: true
+      msrimage:
+        description: 'server docker image'
+        default: 'docker/image:2.0.0'
+        required: true
+      runmsr:
+        description: 'Run only if needed'
+        default: 'true'
+        required: true
+      runis:
+        description: 'Run only if needed'
+        default: 'true'
+        required: true
+      umimage:
+        required: true
+        default: 'docker/image:3.0.0'
+        description: 'Create UM docker image'
+      tags:
+        description: 'tags'
+        default: '@IS or @UM'
+        required: true
+      testImage:
+        description: 'Test image'
+        default: 'docker/image:4.0.0'
+        required: false  
+                
+
+#GITHUB_TOKEN permissions (required)
+permissions: 
+  contents: read
+  
+jobs:
+  execute-siqa-tests:
+    runs-on: [ onprem ]
+    name: checkouts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Execute tests
+        uses: C2E/repo-test-github-action@main
+        with:
+          registry-secret: ${{ secrets.TECH_ONPREMISE_PWD }}
+          registry-username: ${{ secrets.TECH_ONPREMISE_USER }}
+          isimage: ${{ inputs.isimage }}
+          umimage: ${{ inputs.umimage }}
+          testImage: ${{ inputs.testImage }}
+          tags: ${{ inputs.tags }}
+        if: ${{ inputs.runis == 'true' }}
+          
+      - name: Execute tests
+        uses: C2E/repo-test-github-action@main
+        with:
+          registry-secret: ${{ secrets.TECH_ONPREMISE_PWD }}
+          registry-username: ${{ secrets.TECH_ONPREMISE_USER }}
+          isimage: ${{ inputs.msrimage }}
+          umimage: ${{ inputs.umimage }}
+          testImage: ${{ inputs.testImage }}
+          tags: ${{ inputs.tags }}
+        if: ${{ inputs.runmsr == 'true' }}
