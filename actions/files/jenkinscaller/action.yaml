@@ -1,0 +1,56 @@
+# action.yml
+name: JENKINS CALLER WORKFLOW
+description: "Trigger Jenkins job from the workflow"
+
+on:
+  workflow_dispatch:
+    inputs:
+      JENKINS_URL:
+        description: 'JENKINS URL'
+        default: 'http://localhost:8080'
+        required: true
+        type: string
+      JENKINS_JOB_NAME:
+        description: 'JENKINS JOB NAME'
+        default: 'JOB_NAME'
+        required: true
+        type: string
+      JENKINS_USER:
+        description: 'JENKINS USER'
+        default: ''
+        required: true
+        type: string
+      JENKINS_API_TOKEN:
+        description: 'JENKINS API TOKEN'
+        default: ''
+        required: true
+        type: string
+      STRING_PARAMETERS:
+        description: 'JENKINS STRING PARAMETERS'
+        default: ''
+        required: false
+        type: string
+           
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+       repository: AIM/Jenkins-job-caller-action
+       path: Jenkins-job-caller-action
+       ref: demo
+      
+    - name: Trigger Jenkins Job
+      env:
+        JENKINS_URL: ${{ inputs.JENKINS_URL }}
+        JENKINS_JOB_NAME: ${{ inputs.JENKINS_JOB_NAME }}
+        JENKINS_USER: ${{ inputs.JENKINS_USER }}
+        JENKINS_API_TOKEN: ${{ inputs.JENKINS_API_TOKEN }}
+        STRING_PARAMETERS: ${{ inputs.STRING_PARAMETERS }}
+      id: trigger-job
+      run: |
+        chmod +x ../../triggeraction.sh
+        sh ../../triggeraction.sh
+
+      shell: bash
