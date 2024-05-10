@@ -1,16 +1,16 @@
 # action.yml
-name: "SIQA Tests"
-description: "Execute SIQA Integration tests"
+name: "Tests"
+description: "Execute tests"
 
 inputs:
      isimage:
         required: true
-        default: iregistry.eur.ad.sag/aim/esb-is:qa
-        description: 'Create IS docker image'
+        default: 'docker/image:1.0.0'
+        description: 'docker image'
      umimage:
         required: true
-        default: iregistry.eur.ad.sag/aim/universalmessaging-server:110oct2023-integration
-        description: 'Create UM docker image'
+        default: 'docker/image:2.0.0'
+        description: 'docker image'
      registry-username:
         required: true
         default: 'changeit'
@@ -29,7 +29,7 @@ inputs:
         required: false
      testImage:
         description: 'Test image'
-        default: 'iregistry.eur.ad.sag/tech-siqa-onpremise/siqa-test-image:2.0.0'
+        default: 'docker/image:3.0.0'
         required: false
      
 
