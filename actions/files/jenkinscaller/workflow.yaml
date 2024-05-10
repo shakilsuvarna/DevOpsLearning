@@ -1,0 +1,53 @@
+name: Jenkins Trigger action
+
+on:
+  workflow_dispatch:
+    inputs:
+      JENKINS_URL:
+        description: 'JENKINS URL'
+        default: 'http://localhost:8080'
+        required: true
+        type: string
+      JENKINS_JOB_NAME:
+        description: 'JENKINS JOB NAME'
+        default: 'JOB_NAME'
+        required: true
+        type: string
+      JENKINS_USER:
+        description: 'JENKINS USER'
+        default: 'changeit'
+        required: true
+        type: string
+      JENKINS_API_TOKEN:
+        description: 'JENKINS API TOKEN'
+        default: 'changeit'
+        required: true
+        type: string
+      STRING_PARAMETERS:
+        description: 'JENKINS STRING PARAMETERS'
+        default: ''
+        required: false
+        type: string
+                
+
+#GITHUB_TOKEN permissions (required)
+permissions: 
+  contents: read
+  
+jobs:
+  execute-siqa-tests:
+    runs-on: local
+    name: checkouts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+      - name: Trigger Jenkins caller action
+        uses: AIM/Jenkins-job-caller-action@main
+        with:
+          JENKINS_URL: ${{ inputs.JENKINS_URL }}
+          JENKINS_JOB_NAME: ${{ inputs.JENKINS_JOB_NAME }}
+          JENKINS_USER: ${{ inputs.JENKINS_USER }}
+          JENKINS_API_TOKEN: ${{ inputs.JENKINS_API_TOKEN }}
+          STRING_PARAMETERS: ${{ inputs.STRING_PARAMETERS }}
+    
