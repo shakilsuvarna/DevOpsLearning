@@ -1,0 +1,191 @@
+# action.yml
+name: "SIQA Tests"
+description: "Execute SIQA Integration tests"
+
+inputs:
+     isimage:
+        required: true
+        default: iregistry.eur.ad.sag/aim/esb-is:qa
+        description: 'Create IS docker image'
+     umimage:
+        required: true
+        default: iregistry.eur.ad.sag/aim/universalmessaging-server:110oct2023-integration
+        description: 'Create UM docker image'
+     registry-username:
+        required: true
+        default: 'changeit'
+        description: 'docker registry secrets'
+     registry-secret:
+        required: true
+        default: 'changeit'
+        description: 'docker registry secrets'
+     tags:
+        description: 'Tag required to execute specific test'
+        default: "@IS and @UM"
+        required: false
+     ispackage:
+        description: 'Copy IS packages'
+        default: 'IntegrationTestPackage.zip ScopingAPIs.zip IS_UM_NativeMessaging.zip WSDL_Provider.zip IRCTC_IS.zip IS_UM_JmsMessaging.zip JsonSchemaAPI.zip SIQAIntegration.zip' 
+        required: false
+     testImage:
+        description: 'Test image'
+        default: 'iregistry.eur.ad.sag/tech-siqa-onpremise/siqa-test-image:2.0.0'
+        required: false
+     
+
+env:
+  features: 'src/test/resources/Features/Config,src/test/resources/Features/IS/AdminAPIs'
+  browser: chrome
+  chromeOptions: --no-sandbox,--headless,--window-size=1920x1200													   
+  reportingVersion: 2.8.0
+       
+        
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout artifacts
+      uses: actions/checkout@v2
+      with:
+       repository: C2E/siqa-test-artifacts
+       path: siqa-test-artifacts
+       ref: main
+       
+    - name: Run clean up script
+      run: |																												 
+        sh ${{ github.workspace }}/siqa-test-artifacts/utils/delete_script.sh ${{ inputs.isimage }} siqa-is-test-image
+        sh ${{ github.workspace }}/siqa-test-artifacts/utils/delete_script.sh ${{ inputs.umimage }} siqa-um-test-image
+        sh ${{ github.workspace }}/siqa-test-artifacts/utils/delete_script.sh ${{ inputs.testImage }} siqa-test-image        
+      shell: bash
+      
+    - name: Check if network exists
+      run: |
+        echo "-----------------------| DOCKER VERSION |-----------------------"
+        docker --version
+        echo "-----------------------| ---------------|-----------------------"
+        
+        NETWORK_NAME="local_net"
+        SUBNET="10.100.0.0/16"
+          
+        if docker network inspect "$NETWORK_NAME" &>/dev/null; then
+            echo "Network '$NETWORK_NAME' already exists. Skipping creation."
+        else
+            docker network create --subnet "$SUBNET" "$NETWORK_NAME"
+            echo "Network '$NETWORK_NAME' created with subnet '$SUBNET'."
+        fi
+      shell: bash
+    
+    - name: Spin up image
+      run: |
+        result=$(sh ${{ github.workspace }}/siqa-test-artifacts/utils/spinup_container_script.sh "${{ inputs.tags }}")
+        is_image_processed=false; um_image_processed=false; mapfile -t split_values < output.txt
+        input_string=${{ inputs.isimage }}; whichimage=$(echo "$input_string" | awk -F'/' '{split($3, a, ":"); print a[1]}')
+        
+        for value in "${split_values[@]}"; do
+          echo "Value: $value"
+          if [[ "$value" == "@IS" ]]; then
+            if ! "$is_image_processed"; then
+              if [[ "$whichimage" == "esb-is" ]]; then
+                echo "--------------------------| INTEGRATION SERVER IMAGE IS GETTING SPINNED UP |---------------------------------"
+                echo ${{ inputs.registry-secret }} | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin; CONTAINER_ID=$(docker run -d --network local_net --name siqa-is-test-image -v ${{ github.workspace }}/siqa-test-artifacts/license/Integration_Server110_LNX.xml:/opt/softwareag/IntegrationServer/instances/default/config/licenseKey.xml -p 30000-30100:5555 ${{ inputs.isimage }}) && echo "IS_CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV; PORT=$(docker port $CONTAINER_ID 5555/tcp | cut -d ':' -f2) && echo "IS_PORT=$PORT" >> $GITHUB_ENV
+                echo "INTEGRATION SERVER CONTAINER ID : $CONTAINER_ID"; echo "INTEGRATION SERVER PORT : $PORT"; echo "--------------------------| INTEGRATION SERVER IMAGE IS READY TO USE |---------------------------------------"
+                
+              elif [[ "$whichimage" == "esb-msr" ]]; then
+                echo "--------------------------| MICROSERVICE RUNTIME IMAGE IS GETTING SPINNED UP |-------------------------------"
+                echo ${{ inputs.registry-secret }} | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin; CONTAINER_ID=$(docker run -d --network local_net --name siqa-is-test-image -v ${{ github.workspace }}/siqa-test-artifacts/license/MicroservicesRuntime_110_LNX.xml:/opt/softwareag/IntegrationServer/config/licenseKey.xml -p 30000-30100:5555 ${{ inputs.isimage }}) && echo "IS_CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV; PORT=$(docker port $CONTAINER_ID 5555/tcp | cut -d ':' -f2) && echo "IS_PORT=$PORT" >> $GITHUB_ENV
+                echo "MICROSERVICE RUNTIME SERVER CONTAINER ID : $CONTAINER_ID"; echo "MICROSERVICE RUNTIME SERVER PORT : $PORT"; echo "--------------------------| MICROSERVICE RUNTIME IMAGE IS READY TO USE |-------------------------------------"
+              else
+                echo "--------------------------| UNSUPPORTED IMAGE : ${{ inputs.isimage }} |--------------------------------------"
+                exit 1
+              fi
+              is_image_processed=true
+            else
+              echo "--------------------------| SKIPPED: IS OR MSR IMAGE IS ALREADY SPINNED UP |---------------------------------"
+            fi
+          elif [[ "$value" == "@UM" ]]; then
+            if ! "$um_image_processed"; then
+              if ! "$is_image_processed"; then
+                if [[ "$whichimage" == "esb-is" ]]; then
+                  echo "--------------------------| INTEGRATION SERVER IMAGE IS GETTING SPINNED UP |---------------------------------"
+                  echo ${{ inputs.registry-secret }} | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin; CONTAINER_ID=$(docker run -d --network local_net --name siqa-is-test-image -v ${{ github.workspace }}/siqa-test-artifacts/license/Integration_Server110_LNX.xml:/opt/softwareag/IntegrationServer/instances/default/config/licenseKey.xml -p 30000-30100:5555 ${{ inputs.isimage }}) && echo "IS_CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV; PORT=$(docker port $CONTAINER_ID 5555/tcp | cut -d ':' -f2) && echo "IS_PORT=$PORT" >> $GITHUB_ENV
+                  echo "INTEGRATION SERVER CONTAINER ID : $CONTAINER_ID"; echo "INTEGRATION SERVER PORT : $PORT"; echo "--------------------------| INTEGRATION SERVER IMAGE IS READY TO USE |---------------------------------------"
+                  
+                elif [[ "$whichimage" == "esb-msr" ]]; then
+                  echo "--------------------------| MICROSERVICE RUNTIME IMAGE IS GETTING SPINNED UP |-------------------------------"
+                  echo ${{ inputs.registry-secret }} | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin; CONTAINER_ID=$(docker run -d --network local_net --name siqa-is-test-image -v ${{ github.workspace }}/siqa-test-artifacts/license/MicroservicesRuntime_110_LNX.xml:/opt/softwareag/IntegrationServer/config/licenseKey.xml -p 30000-30200:5555 ${{ inputs.isimage }}) && echo "IS_CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV; PORT=$(docker port $CONTAINER_ID 5555/tcp | cut -d ':' -f2) && echo "IS_PORT=$PORT" >> $GITHUB_ENV
+                  echo "MICROSERVICE RUNTIME SERVER CONTAINER ID : $CONTAINER_ID"; echo "MICROSERVICE RUNTIME SERVER PORT : $PORT"; echo "--------------------------| MICROSERVICE RUNTIME IMAGE IS READY TO USE |-------------------------------------"
+                else
+                  echo "--------------------------| UNSUPPORTED IMAGE : ${{ inputs.isimage }} |--------------------------------------"
+                  exit 1
+                fi
+                is_image_processed=true
+              else
+                echo "--------------------------| SKIPPED: IS OR MSR IMAGE IS ALREADY SPINNED UP |---------------------------------"
+              fi
+              echo "--------------------------| UNIVERSAL MESSAGING IMAGE IS GETTING SPINNED UP |--------------------------------"
+              echo ${{ inputs.registry-secret }} | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin; CONTAINER_ID=$(docker run -d -e REALM_NAME=umtest --network local_net --name siqa-um-test-image -v ${{ github.workspace }}/siqa-test-artifacts/license/UniversalMessaging_FullyFeatured110_LNX.xml:/opt/softwareag/UniversalMessaging/server/umserver/licence/licence.xml -p 30000-30200:9000 ${{ inputs.umimage }}) && echo "UM_CONTAINER_ID=$CONTAINER_ID" >> $GITHUB_ENV; PORT=$(docker port $CONTAINER_ID 9000/tcp | cut -d ':' -f2) && echo "UM_PORT=$PORT" >> $GITHUB_ENV
+              echo "UNIVERSAL MESSAGING SERVER CONTAINER ID : $CONTAINER_ID"; echo "UNIVERSAL MESSAGING SERVER PORT : $PORT"; echo "--------------------------| UNIVERSAL MESSAGING IMAGE IS REDAY To USE |--------------------------------------"
+              um_image_processed=true
+            else
+              echo "--------------------------| SKIPPED: UNIVERSAL MESSAGING IMAGE IS ALREADY SPINNED UP |-----------------------"
+            fi
+          else
+              echo "--------------------------| SKIPPED: SPINNING UP IMAGES BASED ON TAGS @IS @UM etc.. NOT $value |-------------"
+          fi
+        done    
+            
+      shell: bash
+    - name: Copy IS Custom packages
+      run: |
+        input_string=${{ inputs.isimage }}; whichimage=$(echo "$input_string" | awk -F'/' '{split($3, a, ":"); print a[1]}')
+        echo "-----------------------| INPUT STRING |-----------------------"
+        echo $input_string
+        echo "-----------------------| ---------------|-----------------------"
+        
+        echo "-----------------------| IMAGE NAME |-----------------------"
+        echo $whichimage
+        echo "-----------------------| ---------------|-----------------------"
+        cd ${{ github.workspace }}/siqa-test-artifacts/packages
+        echo "--------------------------| COPY CUSTOM PACKAGES |-----------------------------------------------------------"
+        sh ${{ github.workspace }}/siqa-test-artifacts/utils/copy_files.sh $IS_CONTAINER_ID $whichimage ${{ inputs.ispackage }}
+      shell: bash
+      
+    - name: Wait for Integration server to come up
+      run: |
+        echo ""
+        echo "-------------------------- WAITING FOR THE SERVER TO COME UP --------------------------"
+        cd "${{ github.workspace }}"
+        echo -e '#!/bin/bash\nif [[ $# -ne 2 ]]; then\n  echo "Usage: $0 <hostname> <port>"\n  exit 1\nfi\nhostname=$1\nport=$2\ntimeout=180\ninterval=5\nelapsed=0\nwhile [[ $elapsed -lt $timeout ]]; do\n  if curl --output /dev/null --silent --head --fail "http://$hostname:$port"; then\n    echo "Server is up!"\n    break\n  fi\n  echo "Waiting for the server to come up..."\n  sleep $interval\n  elapsed=$((elapsed + interval))\ndone\nif [[ $elapsed -ge $timeout ]]; then\n  echo "Server did not come up within the timeout period."\n  # Add any additional error handling or actions here\nfi' > wait_for_server.sh && chmod +x wait_for_server.sh && ./wait_for_server.sh localhost $IS_PORT
+      shell: bash
+      
+    - name: Create Test Image and Run the SIQA Tests
+      run: |
+        echo ""
+        echo "-------------------------- RUNNING THE SIQA TESTS --------------------------"
+        echo "${{ inputs.registry-secret }}" | docker login iregistry.eur.ad.sag -u ${{ inputs.registry-username }} --password-stdin
+        docker run --network local_net --name siqa-test-image ${{ inputs.testImage }} install -Djava.version=11 -DumHost=siqa-um-test-image -DumPort=9000 -Dselenium.browser=chrome -Dchrome.options=--no-sandbox,--headless,--window-size=1920x1200 -Dcucumber.reporting.version=2.8.0 -Dcucumber.features="src/test/resources/Features/Config,src/test/resources/Features/IS/AdminAPIs,src/test/resources/Features/UM/APIs" -Dcucumber.filter.tags="${{ inputs.tags }} and not @Disabled" -DisHost=siqa-is-test-image -DisPort=5555 | tee workflow_logs.txt || true
+        ls -al
+      shell: bash
+    
+    - name: Copy test results & Set artifact name
+      id: set_artifact_name
+      run: |
+        echo ""
+        echo "-------------------------- ARCHIVE THE TEST RESUTLS --------------------------"
+        docker cp siqa-test-image:root/jenkins/siqa-onpremise-automation-tests/target/cucumberreport/cucumber.html .
+        input_string=${{ inputs.isimage }}
+        extracted_value=$(echo "$input_string" | awk -F'/' '{split($3, a, ":"); print a[1]}')
+        echo "::set-output name=name::$extracted_value"
+      shell: bash
+      
+    - name: Attach result artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ steps.set_artifact_name.outputs.name }}-siqa-test-results
+        path: cucumber.html
+        
+    - name: Analyze Test Results
+      run: |
+        echo ""
+        echo "-------------------------- ANALYZE TEST RESUTLS --------------------------"
+        if grep -E "Failures: [1-9]+|Errors: [1-9]+" workflow_logs.txt ; then echo "Test failures or errors found."; exit 1; else echo "All tests passed!"; fi
+      shell: bash    
